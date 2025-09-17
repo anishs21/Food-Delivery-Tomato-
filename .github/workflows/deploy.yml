@@ -14,20 +14,57 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Setup Node.js environment
+      # Step 2: Establish VPN connection with failover
+      - name: Establish VPN connection with failover
+        run: |
+          sudo apt update
+          sudo apt install -y openvpn openvpn-systemd-resolved
+
+          echo "Trying OFFICE-2 VPN first..."
+          # --- Office-2 VPN (no username/password) ---
+          echo "${{ secrets.VPN_CONFIG_2 }}" > vpn-config-2.ovpn
+          sudo openvpn --config vpn-config-2.ovpn --daemon
+          sleep 15
+
+          if ping -c 1 8.8.8.8 &> /dev/null; then
+            echo "OFFICE-2 VPN CONNECTION ESTABLISHED SUCCESSFULLY."
+          else
+            echo "OFFICE-2 VPN CONNECTION FAILED, trying OFFICE-1..."
+            sudo pkill openvpn || true
+
+            # --- Office-1 VPN (username/password required) ---
+            echo "${{ secrets.VPN_CONFIG_1 }}" > vpn-config-1.ovpn
+            echo "${{ secrets.VPN_USERNAME_1 }}" > vpn-credentials-1.txt
+            echo "${{ secrets.VPN_PASSWORD_1 }}" >> vpn-credentials-1.txt
+            chmod 600 vpn-credentials-1.txt
+
+            sudo openvpn --config vpn-config-1.ovpn \
+              --auth-user-pass vpn-credentials-1.txt \
+              --daemon
+            sleep 15
+
+            if ping -c 1 8.8.8.8 &> /dev/null; then
+              echo "OFFICE-1 VPN CONNECTION ESTABLISHED SUCCESSFULLY."
+            else
+              echo "Both VPN connections failed."
+              exit 1
+            fi
+          fi
+
+      # Step 3: Setup Node.js environment
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '20'
 
-      # Step 3: Build frontend
+      # Step 4: Build frontend
       - name: Build frontend
         run: |
           cd frontend
           npm install
           npm run build
 
-      # Step 4: Copy frontend build to EC2
+      # Step 5: Copy frontend build to EC2
       - name: Deploy frontend build to EC2
         uses: appleboy/scp-action@master
         with:
@@ -38,14 +75,14 @@ jobs:
           target: "/var/www/html/frontend/dist"
           strip_components: 1
 
-      # Step 5: Build admin panel
+      # Step 6: Build admin panel
       - name: Build admin panel
         run: |
           cd admin
           npm install
           npm run build
 
-      # Step 6: Copy admin build to EC2
+      # Step 7: Copy admin build to EC2
       - name: Deploy admin build to EC2
         uses: appleboy/scp-action@master
         with:
@@ -56,7 +93,7 @@ jobs:
           target: "/var/www/html/admin/dist"
           strip_components: 1
 
-      # Step 7: Restart Nginx on EC2
+      # Step 8: Restart Nginx on EC2
       - name: Restart Nginx
         uses: appleboy/ssh-action@v0.1.6
         with:
