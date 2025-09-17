@@ -34,7 +34,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "frontend/build/"
+          source: "frontend/dist/"
           target: "/var/www/html/frontend"
           strip_components: 1
 
@@ -52,7 +52,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_KEY }}
-          source: "admin/build/"
+          source: "admin/dist/"
           target: "/var/www/html/admin"
           strip_components: 1
 
